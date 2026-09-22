@@ -82,6 +82,12 @@ class TestGpuRows:
             [_gpu_entry(workload_type='container')])
         assert rows == []
 
+    def test_none_workload_type_skipped(self):
+        """Tests that a null workload_type is skipped, not treated as a
+        'vm' pool."""
+        rows = fetch_jarvislabs.gpu_rows([_gpu_entry(workload_type=None)])
+        assert rows == []
+
     def test_unrecognized_region_skipped(self):
         """Tests that an entry with an unmapped region id is skipped."""
         rows = fetch_jarvislabs.gpu_rows(

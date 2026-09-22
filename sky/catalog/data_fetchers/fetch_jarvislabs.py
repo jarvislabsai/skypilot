@@ -71,8 +71,11 @@ REGION_DISPLAY_CODES = {
     'europe-01': 'EU1',
 }
 
-# We currently support vm-mode instances only
-_VM_WORKLOAD_TYPES = ('vm', None)
+# We currently support vm-mode instances only. `workload_type` is `None` for
+# some regions (e.g. europe-01) that have no dedicated 'vm' pool at all --
+# confirmed live that these are not actually launchable, so `None` must not
+# be treated as equivalent to 'vm'.
+_VM_WORKLOAD_TYPES = ('vm',)
 
 
 def _headers(api_key: str) -> Dict[str, str]:
