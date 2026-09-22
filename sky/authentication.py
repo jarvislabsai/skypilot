@@ -43,6 +43,7 @@ from sky.adaptors import vast
 from sky.adaptors import verda
 from sky.adaptors.verda import VerdaClient
 from sky.provision.fluidstack import fluidstack_utils
+from sky.provision.jarvislabs import utils as jarvislabs_utils
 from sky.provision.kubernetes import utils as kubernetes_utils
 from sky.provision.lambda_cloud import lambda_utils
 from sky.provision.mithril import utils as mithril_utils
@@ -536,6 +537,29 @@ def setup_mithril_authentication(config: Dict[str, Any]) -> Dict[str, Any]:
     config['auth']['ssh_user'] = 'ubuntu'
     config['auth']['ssh_public_key'] = public_key_path
     config['auth']['ssh_key_id'] = ssh_key_id
+
+    return configure_ssh_info(config)
+
+
+def setup_jarvislabs_authentication(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Sets up SSH authentication for JarvisLabs.
+    - Generates a new SSH key pair if one does not exist.
+    - Adds the public SSH key to the user's JarvisLabs account.
+
+    Unlike Mithril, JarvisLabs SSH keys are account-wide rather than passed
+    per-instance at create time, so there is no key id to store in the auth
+    config here.
+    """
+    _, public_key_path = auth_utils.get_or_generate_keys()
+    with open(public_key_path, 'r', encoding='utf-8') as f:
+        public_key = f.read().strip()
+
+    # Register the public key with JarvisLabs (no-op if already exists).
+    jarvislabs_utils.get_or_add_ssh_key(public_key)
+
+    config.setdefault('auth', {})
+    config['auth']['ssh_user'] = 'ubuntu'
+    config['auth']['ssh_public_key'] = public_key_path
 
     return configure_ssh_info(config)
 

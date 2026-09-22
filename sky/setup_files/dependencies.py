@@ -285,6 +285,7 @@ cloud_dependencies: Dict[str, List[str]] = {
     'slurm': ['python-hostlist'],
     'yotta': [],  # No dependencies needed for Yotta
     'verda': [],  # No dependencies needed for verda
+    'jarvislabs': ['jarvislabs>=0.2.17'],
 }
 
 # Calculate which clouds should be included in the [all] installation.
