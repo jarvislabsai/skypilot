@@ -14,7 +14,7 @@ if typing.TYPE_CHECKING:
 
 # Keep it synced with the frequency in
 # skypilot-catalog/.github/workflows/update-jarvislabs-catalog.yml
-_PULL_FREQUENCY_HOURS = 4
+_PULL_FREQUENCY_HOURS = 7
 
 _df = common.read_catalog('jarvislabs/vms.csv',
                           pull_frequency_hours=_PULL_FREQUENCY_HOURS)
