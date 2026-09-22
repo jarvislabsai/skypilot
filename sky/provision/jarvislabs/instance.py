@@ -20,6 +20,24 @@ def _filter_instances(cluster_name_on_cloud: str) -> List['Instance']:
     return utils.list_instances(name_prefix=cluster_name_on_cloud)
 
 
+# The `instance_id` reported to core SkyPilot below is `cluster_name_on_cloud`,
+# not the real JarvisLabs `machine_id` -- confirmed live: JarvisLabs assigns a
+# *new* machine_id on every resume of a paused instance, even though it's the
+# same logical cluster. Core SkyPilot uses the reported instance_id purely as
+# an opaque local bookkeeping key (a cache-directory path segment in
+# sky/provision/metadata_utils.py, never fed back into this provisioner's own
+# functions -- stop/terminate/query/get_cluster_info all re-discover the
+# current real instance by name via _filter_instances() instead). Reporting
+# the real, resume-churning machine_id there defeated that cache: the
+# setup_commands stage (conda/Ray/uv install, apt housekeeping) was
+# re-running in full on every `sky start`, not just on first creation, since
+# its cache key never matched between resumes. cluster_name_on_cloud is
+# stable for the cluster's whole life and unique per cluster (JarvisLabs is
+# single-node only, so there's never more than one real instance to
+# disambiguate against), so using it as the reported ID fixes the cache
+# without needing a real, stable cloud-native ID.
+
+
 def run_instances(
     region: str,
     cluster_name: str,
@@ -40,14 +58,15 @@ def run_instances(
     existing = _filter_instances(cluster_name_on_cloud)
     running = [i for i in existing if i.status == 'Running']
     if running:
-        head_instance_id = str(running[0].machine_id)
-        logger.debug(f'Reusing already-running instance {head_instance_id}')
+        logger.debug(f'Reusing already-running instance '
+                     f'{running[0].machine_id} (reported as '
+                     f'{cluster_name_on_cloud})')
         return common.ProvisionRecord(
             provider_name=PROVIDER_NAME,
             cluster_name=cluster_name_on_cloud,
             region=region,
             zone=None,
-            head_instance_id=head_instance_id,
+            head_instance_id=cluster_name_on_cloud,
             resumed_instance_ids=[],
             created_instance_ids=[],
         )
@@ -55,15 +74,15 @@ def run_instances(
     paused = [i for i in existing if i.status == 'Paused']
     if paused and config.resume_stopped_nodes:
         instance = utils.resume_instance(paused[0].machine_id)
-        head_instance_id = str(instance.machine_id)
-        logger.debug(f'Resumed paused instance {head_instance_id}')
+        logger.debug(f'Resumed paused instance {instance.machine_id} '
+                     f'(reported as {cluster_name_on_cloud})')
         return common.ProvisionRecord(
             provider_name=PROVIDER_NAME,
             cluster_name=cluster_name_on_cloud,
             region=region,
             zone=None,
-            head_instance_id=head_instance_id,
-            resumed_instance_ids=[head_instance_id],
+            head_instance_id=cluster_name_on_cloud,
+            resumed_instance_ids=[cluster_name_on_cloud],
             created_instance_ids=[],
         )
 
@@ -97,16 +116,16 @@ def run_instances(
             storage_gb=storage_gb,
             region=region,
         )
-    head_instance_id = str(instance.machine_id)
-    logger.debug(f'Launched new instance {head_instance_id}')
+    logger.debug(f'Launched new instance {instance.machine_id} (reported '
+                 f'as {cluster_name_on_cloud})')
     return common.ProvisionRecord(
         provider_name=PROVIDER_NAME,
         cluster_name=cluster_name_on_cloud,
         region=region,
         zone=None,
-        head_instance_id=head_instance_id,
+        head_instance_id=cluster_name_on_cloud,
         resumed_instance_ids=[],
-        created_instance_ids=[head_instance_id],
+        created_instance_ids=[cluster_name_on_cloud],
     )
 
 
@@ -154,7 +173,7 @@ def query_instances(
         cluster_status = utils.to_cluster_status(instance.status)
         if non_terminated_only and cluster_status is None:
             continue
-        statuses[str(instance.machine_id)] = (cluster_status, None)
+        statuses[cluster_name_on_cloud] = (cluster_status, None)
     return statuses
 
 
@@ -179,7 +198,7 @@ def get_cluster_info(
         if parsed_user is not None:
             ssh_user = parsed_user
 
-        instance_id = str(instance.machine_id)
+        instance_id = cluster_name_on_cloud
         cluster_instances[instance_id] = [
             common.InstanceInfo(
                 instance_id=instance_id,

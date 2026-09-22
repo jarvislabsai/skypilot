@@ -169,8 +169,10 @@ class TestRunInstancesRouting:
         client.instances.create_cpu_vm.assert_not_called()
         assert client.instances.create.call_args.kwargs['gpu_type'] == (
             'A100-80GB')
-        assert record.head_instance_id == '111'
-        assert record.created_instance_ids == ['111']
+        # instance_id is cluster_name_on_cloud, not the real machine_id --
+        # see the module-level comment in instance.py for why.
+        assert record.head_instance_id == 'sky-c-abcd'
+        assert record.created_instance_ids == ['sky-c-abcd']
 
     def test_gpu_display_name_translated_end_to_end(self, monkeypatch):
         """node_config carries the catalog's display name (RTXPRO6000, no
@@ -220,7 +222,7 @@ class TestRunInstancesRouting:
             region='IN1',
         )
         client.instances.create.assert_not_called()
-        assert record.head_instance_id == '222'
+        assert record.head_instance_id == 'sky-c-wxyz'
 
     def test_cpu_only_config_with_ports_drops_them_with_warning(
             self, monkeypatch, caplog):
@@ -270,7 +272,7 @@ class TestRunInstancesRouting:
 
         client.instances.create.assert_not_called()
         client.instances.create_cpu_vm.assert_not_called()
-        assert record.head_instance_id == '444'
+        assert record.head_instance_id == 'sky-c-reuse'
         assert record.created_instance_ids == []
 
 
@@ -321,9 +323,11 @@ class TestStopAndTerminateInstances:
 
 class TestQueryInstances:
 
-    def test_maps_status_and_keys_by_machine_id(self, monkeypatch):
-        """Tests that query_instances() keys its result by machine_id and
-        maps the real status through to_cluster_status() correctly."""
+    def test_maps_status_keyed_by_cluster_name_on_cloud(self, monkeypatch):
+        """Tests that query_instances() keys its result by
+        cluster_name_on_cloud (not the real, resume-churning machine_id --
+        see the module comment in instance.py) and maps the real status
+        through to_cluster_status() correctly."""
         inst = _make_instance('sky-c-1-head', machine_id=1, status='Running')
         client = mock.MagicMock()
         client.instances.list.return_value = [inst]
@@ -332,7 +336,7 @@ class TestQueryInstances:
         statuses = jarvislabs_instance.query_instances(
             cluster_name='c', cluster_name_on_cloud='sky-c-1')
 
-        assert statuses == {'1': (status_lib.ClusterStatus.UP, None)}
+        assert statuses == {'sky-c-1': (status_lib.ClusterStatus.UP, None)}
 
 
 class TestGetClusterInfo:
@@ -367,9 +371,9 @@ class TestGetClusterInfo:
         info = jarvislabs_instance.get_cluster_info(
             region='IN2', cluster_name_on_cloud='sky-c-1')
 
-        assert info.head_instance_id == '5'
+        assert info.head_instance_id == 'sky-c-1'
         assert info.ssh_user == 'root'
-        node_info = info.instances['5'][0]
+        node_info = info.instances['sky-c-1'][0]
         assert node_info.internal_ip == '10.0.0.5'
         assert node_info.external_ip == '1.2.3.4'
         assert node_info.ssh_port == 2222
